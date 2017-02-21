@@ -32,19 +32,45 @@ enum ewords { wrd_its = 0, wrd_a , wrd_just, wrd_gone, wrd_near, wrd_nearly , wr
               wrd_evening , wrd_midnight , wrd_afternoon , wrd_midday , wrd_today, wrd_is , wrd_wednesday , wrd_monday , wrd_tuesday , wrd_thursday , 
               wrd_friday , wrd_sunday , wrd_saturday , wrd_at, wrd_night};
 
-int words_st[] {
+const PROGMEM int words_st[] {
                     236 , 234 , 229 , 224 , 208 , 208 , 215 , 192 , 218 , 204 , 200 , 
                     176 , 189 , 184 , 173 , 164 , 128 , 156 , 147 , 144 , 132 , 
                     169 , 160 , 113 , 150 , 138 , 117 , 125 , 107 , 73  , 
                     80  , 64  , 97  , 88  , 48  , 54  , 32  , 42  , 57  , 17  , 
                     26  , 10  , 1   , 110 , 64};       
               
-int words_len[] {
+const PROGMEM int words_len[] {
                     4   , 1   , 4   , 4   , 4   , 6   , 3   , 7   , 6   , 4   , 4   ,
                     7   , 2   , 4   , 3   , 5   , 3   , 4   , 4   , 3   , 5   , 
                     5   , 4   , 3   , 6   , 6   , 7   , 2   , 3   , 7   ,
                     7   , 8   , 9   , 6   , 5   , 2   , 9   , 6   , 7   , 8   ,
                     6   , 6   , 8   , 2   , 5};       
+
+const char month_01[] PROGMEM = {"January"};
+const char month_02[] PROGMEM = {"Febuary"};
+const char month_03[] PROGMEM = {"March"};
+const char month_04[] PROGMEM = {"April"};
+const char month_05[] PROGMEM = {"May"};
+const char month_06[] PROGMEM = {"June"};
+const char month_07[] PROGMEM = {"July"};
+const char month_08[] PROGMEM = {"August"};
+const char month_09[] PROGMEM = {"September"};
+const char month_10[] PROGMEM = {"October"};
+const char month_11[] PROGMEM = {"November"};
+const char month_12[] PROGMEM = {"December"};
+
+const char* const month_table[] PROGMEM = {month_01, month_02, month_03, month_04, month_05, month_06,
+                                           month_07, month_08, month_09, month_10, month_11, month_12};
+
+const char  day_01[] PROGMEM = {"Sunday"};
+const char  day_02[] PROGMEM = {"Monday"};
+const char  day_03[] PROGMEM = {"Tuesday"};
+const char  day_04[] PROGMEM = {"Wednesday"};
+const char  day_05[] PROGMEM = {"Thursday"};
+const char  day_06[] PROGMEM = {"Friday"};
+const char  day_07[] PROGMEM = {"Saturday"};
+
+const char* const day_table[] PROGMEM ={day_01, day_02, day_03, day_04, day_05, day_06, day_07};
 
 int num_words = 0;
 ewords words_ids[20];
@@ -257,7 +283,7 @@ rgb_color get_word_color(int w)
 {
   uint16_t t = millis() >> 8;
   t += w * 137;
-  return hsvToRgb(t % 360, 255, 80);
+  return hsvToRgb(t % 360, 255, 60);
 }
 
 void add_word(ewords w)
@@ -520,28 +546,30 @@ void word_time_to_colour_buffer(void)
   {
     rgb_color col = get_word_color(w);
     ewords wrd = words_ids[w];
-    for(int j = 0; j < words_len[wrd]; j++)
+    int wl = pgm_read_byte_near(words_len + wrd);
+    int ws = pgm_read_byte_near(words_st + wrd);
+    for(int j = 0; j < wl; j++)
     {
-      colors[j+words_st[wrd]] = col;
+      colors[j+ws] = col;
     }
   }
 }
 
-int testw=0;
-void test_colour_buffer(void)
-{
-  clear_down_all_colors();
-  rgb_color col = get_word_color(testw);
-  for(int j = 0; j < words_len[testw]; j++)
-  {
-    colors[j+words_st[testw]] = col;
-  }
-   testw ++;
-   if (testw>44)
-   {
-    testw=0;
-   }
-}
+//int testw=0;
+//void test_colour_buffer(void)
+//{
+//  clear_down_all_colors();
+//  rgb_color col = get_word_color(testw);
+//  for(int j = 0; j < words_len[testw]; j++)
+//  {
+//    colors[j+words_st[testw]] = col;
+//  }
+//   testw ++;
+//   if (testw>44)
+//   {
+//    testw=0;
+//   }
+//}
 
 void set_pixel(int x, int y, rgb_color col)
 {
@@ -590,52 +618,6 @@ void add_5x7_num_to_color_buffer(int xp, int yp, int c, rgb_color col)
   add_5x7_char_to_color_buffer(xp,yp,c+0x30,col);
 }
 
-float gh=0.0;
-float gt=0.0;
-bool read_temp = false;
-
-void temperature_to_colour_buffer(void)
-{
-  char str[50];
-  int t = gt;
-  sprintf(str, "Temperature %dC", t);  
-  scroll_message_on_display_single_col(str,get_word_color(1));
-  t = gh;
-  sprintf(str, "Humidity %d%%", t);  
-  scroll_message_on_display_single_col(str,get_word_color(2));
-}
-
-void date_to_colour_buffer(void)
-{
-  char str[50];
-  int t = gt;
-  sprintf(str, "Temperature %dC", t);  
-  scroll_message_on_display_single_col(str,get_word_color(1));
-  t = gh;
-  sprintf(str, "Humidity %d%%", t);  
-  scroll_message_on_display_single_col(str,get_word_color(2));
-}
-
-void scroll_message_on_display(String message)
-{
-  message = "  " + message + "   ";
-  int clen = message.length() -3 ;
-  
-  for (int ch = 0; ch < clen; ch++)
-  {
-      for (int x = 4; x >= 0; x--)
-      {
-        clear_down_all_colors();
-        add_5x7_char_to_color_buffer(x-6,5,message[ch],get_word_color(ch));
-        add_5x7_char_to_color_buffer(x,5,message[ch+1],get_word_color(ch+1));
-        add_5x7_char_to_color_buffer(x+6,5,message[ch+2],get_word_color(ch+2));
-        add_5x7_char_to_color_buffer(x+12,5,message[ch+3],get_word_color(ch+3));
-        ledStrip.write(colors, LED_COUNT);  
-        delay(10);
-      }
-  }
-}
-
 void scroll_message_on_display_single_col(String message, rgb_color col)
 {
   message = "  " + message + "   ";
@@ -651,7 +633,7 @@ void scroll_message_on_display_single_col(String message, rgb_color col)
         add_5x7_char_to_color_buffer(x+6,5,message[ch+2],col);
         add_5x7_char_to_color_buffer(x+12,5,message[ch+3],col);
         ledStrip.write(colors, LED_COUNT);  
-        delay(100);
+        delay(50);
       }
   }
 }
@@ -663,15 +645,14 @@ void process_message(int dbg, String message)
   Serial.print("}");
   Serial.println(dbg);
 
-  scroll_message_on_display(message);
-  scroll_message_on_display(message);
+  scroll_message_on_display_single_col(message,get_word_color(1));
 }
 
 void setup()
 {
   rtc.stopRTC(); //stop the RTC
-  rtc.setTime(18,47,0); //set the time here
-  rtc.setDate(20,2,2017); //set the date here
+  rtc.setTime(11,06,0); //set the time here
+  rtc.setDate(21,2,2017); //set the date here
   rtc.startRTC(); //start the RTC
   
   Serial.begin(19200); //choose the serial speed here
@@ -680,6 +661,49 @@ void setup()
   Serial.println("Ready to receive time or messages."); 
   Serial.println("Time format is T12:00:00-01-02-2016~"); 
 }
+
+float gh=0.0;
+float gt=0.0;
+bool read_temp = false;
+bool disp_temp = false;
+bool disp_date = false;
+
+
+void temperature_to_colour_buffer(void)
+{
+  char str_buff[20];
+  sprintf(str_buff, "Temp%dC RH%d%%",(int)gt,(int)gh);  
+  scroll_message_on_display_single_col(str_buff,get_word_color(1));
+}
+
+void date_to_colour_buffer(void)
+{
+ char str_buff[128];
+ char str_month[10];
+ char str_day[10];
+ strcpy_P(str_month, (char*)pgm_read_word(&(month_table[rtc.getMonth()-1])));
+ strcpy_P(str_day, (char*)pgm_read_word(&(day_table[rtc.getWeekDay()])));
+ int d = rtc.getDay();
+ switch (d % 10)
+ {
+  case 1:
+    sprintf(str_buff,"%s %dst %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    break;
+  case 2:
+    sprintf(str_buff,"%s %dnd %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    break;
+  case 3:
+    sprintf(str_buff,"%s %drd %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    break;
+  default:
+    sprintf(str_buff,"%s %dth %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    break;
+ }
+                  
+  scroll_message_on_display_single_col(str_buff,get_word_color(1));
+}
+
+ //strcpy_P(buffer, (char*)pgm_read_word(&(string_table[i]))); // Necessary casts and dereferencing, just copy.
 
 void loop()
 {
@@ -698,15 +722,24 @@ void loop()
     // Read temperature as Celsius (the default)
     gt = dht.readTemperature();
     read_temp = false;
+    disp_temp = true;
   }
-  if ((secs > 5) && (secs < 15))
+  if (secs == 34)
   {
+    disp_date = true;
+  }
+
+  if ((secs == 5) && (disp_temp == true))
+  {
+    disp_temp=false;
     temperature_to_colour_buffer();
   }
-  else if ((secs > 35) && (secs < 45))
+  if ((secs == 35) && (disp_date == true))
   {
-    temperature_to_colour_buffer();
+    disp_date = false;
+    date_to_colour_buffer();
   }
+  
   else
   {
     get_time_in_words();
