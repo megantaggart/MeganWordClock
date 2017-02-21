@@ -114,6 +114,7 @@ const PROGMEM char font5x7[] = {
    0x0e, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0e,   // 0x5d, ] 
    0x04, 0x0a, 0x11, 0x00, 0x00, 0x00, 0x00,   // 0x5e, ^ 
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f,   // 0x5f, _ 
+   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f,   // 0x5f, _ 
    0x04, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00,   // 0x60, ` 
    0x00, 0x0e, 0x01, 0x0d, 0x13, 0x13, 0x0d,   // 0x61, a 
    0x10, 0x10, 0x10, 0x1c, 0x12, 0x12, 0x1c,   // 0x62, b 
@@ -566,23 +567,17 @@ void set_pixel(int x, int y, rgb_color col)
    colors[pxidx]=col;
 }
 
-void add_5x7_char_to_color_buffer(int xp, int yp, int c, rgb_color col)
+void add_5x7_char_to_color_buffer(int xp, int yp, uint16_t c, rgb_color col)
 {
-  if (( c < 0x20) || (c >0x7f))
+  if (( c < 0x20) || (c > 0x7f))  { c=0x20;  }
+  c = (c -0x20) * 7;
+  for (uint16_t y=0;y<7;y++)
   {
-     c=0x20;
-  }
-  c-=0x20;
-  c*=7;
-  //font5x7nums
-  for (int y=0;y<7;y++)
-  {
+    char g = pgm_read_byte_near(font5x7 + (c+y));
     for(int x=0;x<6;x++)
     {
-    char g = pgm_read_byte_near(font5x7 + (c+y));
-//      char g = font5x7[c+y];
-      g &= (1<<(5-x));
-      if (g>0)
+      //g &= (1<<(5-x));
+      if (g & (1<<(5-x)))
       {
         set_pixel(x+xp,y+yp,col);
       }
@@ -601,20 +596,24 @@ bool read_temp = false;
 
 void temperature_to_colour_buffer(void)
 {
-  clear_down_all_colors();
+  char str[50];
   int t = gt;
-  add_5x7_num_to_color_buffer(5,0,t%10,get_word_color(1));
-  t/=10;
-  add_5x7_num_to_color_buffer(-1,0,t%10,get_word_color(1));
-  add_5x7_char_to_color_buffer(10,0,'C',get_word_color(1));
-
-  
+  sprintf(str, "Temperature %dC", t);  
+  scroll_message_on_display_single_col(str,get_word_color(1));
   t = gh;
-  add_5x7_num_to_color_buffer(5,8,t%10,get_word_color(2));
-  t/=10;
-  add_5x7_num_to_color_buffer(-1,8,t%10,get_word_color(2));
-  add_5x7_char_to_color_buffer(10,8,'%',get_word_color(2));
+  sprintf(str, "Humidity %d%%", t);  
+  scroll_message_on_display_single_col(str,get_word_color(2));
+}
 
+void date_to_colour_buffer(void)
+{
+  char str[50];
+  int t = gt;
+  sprintf(str, "Temperature %dC", t);  
+  scroll_message_on_display_single_col(str,get_word_color(1));
+  t = gh;
+  sprintf(str, "Humidity %d%%", t);  
+  scroll_message_on_display_single_col(str,get_word_color(2));
 }
 
 void scroll_message_on_display(String message)
@@ -632,11 +631,31 @@ void scroll_message_on_display(String message)
         add_5x7_char_to_color_buffer(x+6,5,message[ch+2],get_word_color(ch+2));
         add_5x7_char_to_color_buffer(x+12,5,message[ch+3],get_word_color(ch+3));
         ledStrip.write(colors, LED_COUNT);  
+        delay(10);
+      }
+  }
+}
+
+void scroll_message_on_display_single_col(String message, rgb_color col)
+{
+  message = "  " + message + "   ";
+  int clen = message.length() -3 ;
+  
+  for (int ch = 0; ch < clen; ch++)
+  {
+      for (int x = 4; x >= 0; x--)
+      {
+        clear_down_all_colors();
+        add_5x7_char_to_color_buffer(x-6,5,message[ch],col);
+        add_5x7_char_to_color_buffer(x,5,message[ch+1],col);
+        add_5x7_char_to_color_buffer(x+6,5,message[ch+2],col);
+        add_5x7_char_to_color_buffer(x+12,5,message[ch+3],col);
+        ledStrip.write(colors, LED_COUNT);  
         delay(100);
       }
   }
-  
 }
+
 void process_message(int dbg, String message)
 {
   Serial.print("Recieved scrolling message {");
