@@ -6,6 +6,7 @@
 #include <PololuLedStrip.h>
 #include <swRTC.h>
 #include "DHT.h"
+#include <Dusk2Dawn.h>
 
 #define DHTPIN 2     // what digital pin we're connected to
 
@@ -25,6 +26,8 @@ PololuLedStrip<12> ledStrip;
 // Create a buffer for holding the colors (3 bytes per color).
 #define LED_COUNT 240
 rgb_color colors[LED_COUNT];
+
+Dusk2Dawn sun_home(54.4846, -5.4366, 0);
 
 enum ewords { wrd_its = 0, wrd_a , wrd_just, wrd_gone, wrd_near, wrd_nearly , wrd_ten , wrd_quarter , wrd_twenty , wrd_half , wrd_five , 
               wrd_minutes , wrd_to , wrd_past , wrd_hone , wrd_hthree , wrd_htwo , wrd_hfour , wrd_hfive , wrd_hsix , wrd_hseven , 
@@ -634,7 +637,10 @@ void scroll_message_on_display_single_col(String message, rgb_color col)
   message = "  " + message + "   ";
   int clen = message.length() -3 ;
 
-  col = (rgb_color){30,30,30};
+  if (random()%10==0)
+  {
+    col = (rgb_color){30,30,30};
+  }
   for (int ch = 0; ch < clen; ch++)
   {
       for (int x = 4; x >= 0; x--)
@@ -645,7 +651,7 @@ void scroll_message_on_display_single_col(String message, rgb_color col)
         add_5x7_char_to_color_buffer(x+6,8,message[ch+2],col);
         add_5x7_char_to_color_buffer(x+12,8,message[ch+3],col);
         ledStrip.write(colors, LED_COUNT);  
-        delay(25);
+        delay(40);
       }
   }
 }
@@ -681,38 +687,51 @@ bool disp_temp = false;
 bool disp_date = false;
 
 
-void temperature_to_colour_buffer(void)
-{
-  char str_buff[20];
-  sprintf(str_buff, "Temp%dC RH%d%%",(int)gt,(int)gh);  
-  scroll_message_on_display_single_col(str_buff,get_word_color(1));
-}
-
 void date_to_colour_buffer(void)
 {
  char str_buff[128];
  char str_month[10];
  char str_day[10];
- strcpy_P(str_month, (char*)pgm_read_word(&(month_table[rtc.getMonth()-1])));
- strcpy_P(str_day, (char*)pgm_read_word(&(day_table[rtc.getWeekDay()])));
  int d = rtc.getDay();
+ int y = rtc.getYear();
+ int mth = rtc.getMonth();
+ strcpy_P(str_month, (char*)pgm_read_word(&(month_table[mth-1])));
+ strcpy_P(str_day, (char*)pgm_read_word(&(day_table[rtc.getWeekDay()])));
  switch (d % 10)
  {
   case 1:
-    sprintf(str_buff,"%s %dst %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff,"%s %dst %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
     break;
   case 2:
-    sprintf(str_buff,"%s %dnd %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff,"%s %dnd %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
     break;
   case 3:
-    sprintf(str_buff,"%s %drd %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff,"%s %drd %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
     break;
   default:
-    sprintf(str_buff,"%s %dth %s %d %02d:%02d", str_day, d, str_month, rtc.getYear(), rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff,"%s %dth %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
     break;
  }
-                  
-  scroll_message_on_display_single_col(str_buff,get_word_color(1));
+ 
+ // Time is returned in minutes elapsed since midnight. If no sunrises or
+ // sunsets are expected, a "-1" is returned.
+ int sunrise  = sun_home.sunrise(y, mth, d, false);
+ int sunset   = sun_home.sunset (y, mth, d, false);
+
+ char tme[] = "00:00";
+ Dusk2Dawn::min2str(tme, sunrise);
+ strcat(str_buff, " Sunrise:");
+ strcat(str_buff,tme);
+                    
+ strcpy(tme,"00:00");
+ Dusk2Dawn::min2str(tme, sunset);
+ strcat(str_buff, " Sunset:");
+ strcat(str_buff,tme);
+ 
+ char t_buff[20];
+ sprintf(t_buff, " Temp:%dC RH:%d%%",(int)gt,(int)gh);  
+ strcat(str_buff, t_buff);
+ scroll_message_on_display_single_col(str_buff,get_word_color(random(20)));
 }
 
  //strcpy_P(buffer, (char*)pgm_read_word(&(string_table[i]))); // Necessary casts and dereferencing, just copy.
@@ -730,6 +749,57 @@ void random_to_colour_buffer(void)
   }
   ledStrip.write(colors, LED_COUNT);  
 }
+
+//void do_line(int x1, int y1, int x2, int y2, rgb_color col)
+//{
+//    int gd,gm;
+//
+//    int dx = (x2 - x1);
+//    int dy = (y2 - y1);
+//    int p = 2 * (dy) - (dx);
+//
+//    int x = x1;
+//    int y = y1;
+//
+//    set_pixel(x,y,col);
+//
+//    while(x <= x2)
+//    {
+//      if(p < 0)
+//      {
+//        x=x+1;
+//        y=y;
+//        p = p + 2 * (dy);
+//      }
+//      else
+//      {
+//        x=x+1;
+//        y=y+1;
+//        p = p + 2 * (dy - dx);
+//     }
+//     set_pixel(x,y,col);
+//   }  
+//}
+//
+//void draw_clock_face(void)
+//{
+//  clear_down_all_colors();
+//  float ang = 0.5235 * (float)(rtc.getHours() + 3);
+//  float ex = 8 + (4*sin(ang));
+//  float ey = 8 + (4*cos(ang));
+//  
+//  do_line(8,8,ex,ey,(rgb_color){100,0,0});
+//  ang = 0.1047 * (float)(rtc.getMinutes() + 15);
+//  ex = 8 + (6*sin(ang));
+//  ey = 8 + (6*cos(ang));
+//  do_line(8,8,ex,ey,(rgb_color){0,100,0});  
+//
+//  ang = 0.1047 * (float)(rtc.getSeconds() + 15);
+//  ex = 8 + (8*sin(ang));
+//  ey = 8 + (8*cos(ang));
+//  do_line(8,8,ex,ey,(rgb_color){0,0,100});  
+//  ledStrip.write(colors, LED_COUNT);  
+//}
 
 void loop()
 {
@@ -758,7 +828,8 @@ void loop()
   if ((secs == 5) && (disp_temp == true))
   {
     disp_temp=false;
-    temperature_to_colour_buffer();
+    //temperature_to_colour_buffer();
+    date_to_colour_buffer();
   }
   else if ((secs == 35) && (disp_date == true))
   {
