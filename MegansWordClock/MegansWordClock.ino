@@ -283,7 +283,7 @@ rgb_color get_word_color(int w)
 {
   uint16_t t = millis() >> 8;
   t += w * 137;
-  return hsvToRgb(t % 360, 255, 60);
+  return hsvToRgb(t % 360, 250, 40);
 }
 
 void add_word(ewords w)
@@ -539,6 +539,17 @@ void clear_down_all_colors(void)
   }
 }
 
+void clear_down_bottom_colors(void)
+{
+  for(int i = 0; i < 112; i++)
+  {
+    colors[i] = (rgb_color){0,0,0};
+  }
+  colors[125]= (rgb_color){0,0,0};
+  colors[126]= (rgb_color){0,0,0};
+}
+
+
 void word_time_to_colour_buffer(void)
 {
   clear_down_all_colors();
@@ -622,18 +633,19 @@ void scroll_message_on_display_single_col(String message, rgb_color col)
 {
   message = "  " + message + "   ";
   int clen = message.length() -3 ;
-  
+
+  col = (rgb_color){30,30,30};
   for (int ch = 0; ch < clen; ch++)
   {
       for (int x = 4; x >= 0; x--)
       {
-        clear_down_all_colors();
-        add_5x7_char_to_color_buffer(x-6,5,message[ch],col);
-        add_5x7_char_to_color_buffer(x,5,message[ch+1],col);
-        add_5x7_char_to_color_buffer(x+6,5,message[ch+2],col);
-        add_5x7_char_to_color_buffer(x+12,5,message[ch+3],col);
+        clear_down_bottom_colors();
+        add_5x7_char_to_color_buffer(x-6,8,message[ch],col);
+        add_5x7_char_to_color_buffer(x,8,message[ch+1],col);
+        add_5x7_char_to_color_buffer(x+6,8,message[ch+2],col);
+        add_5x7_char_to_color_buffer(x+12,8,message[ch+3],col);
         ledStrip.write(colors, LED_COUNT);  
-        delay(50);
+        delay(25);
       }
   }
 }
@@ -656,7 +668,7 @@ void setup()
   rtc.startRTC(); //start the RTC
   
   Serial.begin(19200); //choose the serial speed here
-  Serial.setTimeout(250);
+  Serial.setTimeout(500);
   
   Serial.println("Ready to receive time or messages."); 
   Serial.println("Time format is T12:00:00-01-02-2016~"); 
@@ -705,6 +717,20 @@ void date_to_colour_buffer(void)
 
  //strcpy_P(buffer, (char*)pgm_read_word(&(string_table[i]))); // Necessary casts and dereferencing, just copy.
 
+void random_to_colour_buffer(void)
+{
+  //clear_down_all_colors();
+  for(int i=0;i<10;i++)
+  {
+      colors[random(240)]=(rgb_color){0,0,0};
+  }
+  for(int i=0;i<5;i++)
+  {
+      colors[random(240)]=hsvToRgb(random(360), 250, 40);
+  }
+  ledStrip.write(colors, LED_COUNT);  
+}
+
 void loop()
 {
   // If any digit is received, we will go into integer parsing mode
@@ -734,12 +760,15 @@ void loop()
     disp_temp=false;
     temperature_to_colour_buffer();
   }
-  if ((secs == 35) && (disp_date == true))
+  else if ((secs == 35) && (disp_date == true))
   {
     disp_date = false;
     date_to_colour_buffer();
   }
-  
+  else if (secs >= 59)
+  {
+    random_to_colour_buffer();
+  }
   else
   {
     get_time_in_words();
