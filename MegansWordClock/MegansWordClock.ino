@@ -2,11 +2,11 @@
  *  Megans word clock
  */
  
+#include <Wire.h> 
+#include <RtcDS3231.h>
 #include <avr/pgmspace.h>
 #include <PololuLedStrip.h>
-#include <swRTC.h>
 #include "DHT.h"
-#include <Dusk2Dawn.h>
 
 #define DHTPIN 2     // what digital pin we're connected to
 
@@ -17,8 +17,8 @@
 
 DHT dht(DHTPIN, DHTTYPE);
 
-//Create a new istance of the sw RTC lib
-swRTC rtc; 
+//Create a new istance of the RTC
+RtcDS3231<TwoWire> Rtc(Wire);
 
 // Create an ledStrip object and specify the pin it will use.
 PololuLedStrip<12> ledStrip;
@@ -26,8 +26,6 @@ PololuLedStrip<12> ledStrip;
 // Create a buffer for holding the colors (3 bytes per color).
 #define LED_COUNT 240
 rgb_color colors[LED_COUNT];
-
-Dusk2Dawn sun_home(54.4846, -5.4366, 0);
 
 enum ewords { wrd_its = 0, wrd_a , wrd_just, wrd_gone, wrd_near, wrd_nearly , wrd_ten , wrd_quarter , wrd_twenty , wrd_half , wrd_five , 
               wrd_minutes , wrd_to , wrd_past , wrd_hone , wrd_hthree , wrd_htwo , wrd_hfour , wrd_hfive , wrd_hsix , wrd_hseven , 
@@ -49,29 +47,29 @@ const PROGMEM int words_len[] {
                     7   , 8   , 9   , 6   , 5   , 2   , 9   , 6   , 7   , 8   ,
                     6   , 6   , 8   , 2   , 5};       
 
-const char month_01[] PROGMEM = {"January"};
-const char month_02[] PROGMEM = {"Febuary"};
-const char month_03[] PROGMEM = {"March"};
-const char month_04[] PROGMEM = {"April"};
+const char month_01[] PROGMEM = {"Jan"};
+const char month_02[] PROGMEM = {"Feb"};
+const char month_03[] PROGMEM = {"Mar"};
+const char month_04[] PROGMEM = {"Apr"};
 const char month_05[] PROGMEM = {"May"};
-const char month_06[] PROGMEM = {"June"};
-const char month_07[] PROGMEM = {"July"};
-const char month_08[] PROGMEM = {"August"};
-const char month_09[] PROGMEM = {"September"};
-const char month_10[] PROGMEM = {"October"};
-const char month_11[] PROGMEM = {"November"};
-const char month_12[] PROGMEM = {"December"};
+const char month_06[] PROGMEM = {"Jun"};
+const char month_07[] PROGMEM = {"Jul"};
+const char month_08[] PROGMEM = {"Aug"};
+const char month_09[] PROGMEM = {"Sep"};
+const char month_10[] PROGMEM = {"Oct"};
+const char month_11[] PROGMEM = {"Nov"};
+const char month_12[] PROGMEM = {"Dec"};
 
 const char* const month_table[] PROGMEM = {month_01, month_02, month_03, month_04, month_05, month_06,
                                            month_07, month_08, month_09, month_10, month_11, month_12};
 
-const char  day_01[] PROGMEM = {"Sunday"};
-const char  day_02[] PROGMEM = {"Monday"};
-const char  day_03[] PROGMEM = {"Tuesday"};
-const char  day_04[] PROGMEM = {"Wednesday"};
-const char  day_05[] PROGMEM = {"Thursday"};
-const char  day_06[] PROGMEM = {"Friday"};
-const char  day_07[] PROGMEM = {"Saturday"};
+const char  day_01[] PROGMEM = {"Sun"};
+const char  day_02[] PROGMEM = {"Mon"};
+const char  day_03[] PROGMEM = {"Tue"};
+const char  day_04[] PROGMEM = {"Wed"};
+const char  day_05[] PROGMEM = {"Thu"};
+const char  day_06[] PROGMEM = {"Fri"};
+const char  day_07[] PROGMEM = {"Sat"};
 
 const char* const day_table[] PROGMEM ={day_01, day_02, day_03, day_04, day_05, day_06, day_07};
 
@@ -178,87 +176,6 @@ const PROGMEM char font5x7[] = {
    0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f,   // 0x7f, DEL 
    };   
    
-void read_command_from_serial() 
-{
-  String command;
-  if(Serial.available() > 0) 
-  {
-     command = Serial.readStringUntil('~');
-     //012345678901234567890
-     //T12:00:00-01-02-16E
-     if (command.length() >= 18)
-     {
-        // process the commmand
-        if ((command[0]!='T'))
-        {
-          process_message(1,command);
-          return;
-        }
-        int vals[6]={0,0,0,0,0,0};
-        for (int i=0; i<6; i++)
-        {
-          int v = (i*3) + 1; 
-          if ((command[v]<'0') || (command[v]>'9') || (command[v+1]<'0') || (command[v+1]>'9'))
-          {
-            process_message(2,command);
-            return;
-          }
-          vals[i]=command[v]-'0';
-          vals[i]*=10; 
-          vals[i]+=command[v+1]-'0';
-        }
-        if (( vals[0]<0) || (vals[0] > 23))
-        {
-            process_message(3,command);
-            return;
-        }
-        if (( vals[1]<0) || (vals[1] > 59))
-        {
-            process_message(4,command);
-            return;
-        }
-        if (( vals[2]<0) || (vals[2] > 59))
-        {
-            process_message(5,command);
-            return;
-        }
-        if (( vals[3]<0) || (vals[3] > 31))
-        {
-            process_message(6,command);
-            return;
-        }
-        if (( vals[4]<1) || (vals[4] > 12))
-        {
-            process_message(7,command);
-            return;
-        }
-        if (( vals[5]< 16) || (vals[5] > 99))
-        {
-            process_message(8,command);
-            return;
-        }
-        Serial.print("Processing date and time ");
-        Serial.print(vals[0]); Serial.print(":");
-        Serial.print(vals[1]); Serial.print(":");
-        Serial.print(vals[2]); Serial.print(" ");
-        Serial.print(vals[3]); Serial.print("/");
-        Serial.print(vals[4]); Serial.print("/20");
-        Serial.println(vals[5]); 
-        rtc.stopRTC(); //stop the RTC
-        rtc.setTime(vals[0],vals[1],vals[2]); 
-        rtc.setDate(vals[3],vals[4],2000+vals[5]); 
-        rtc.startRTC(); //start the RTC
-     }
-     else
-     {
-       if (command.length() > 0)
-       {
-            process_message(9,command);
-       }
-     }
-     
-  }
-}
 
 // Converts a color from HSV to RGB.
 // h is hue, as a number between 0 and 360.
@@ -266,6 +183,8 @@ void read_command_from_serial()
 // v is the value, as a number between 0 and 255.
 rgb_color hsvToRgb(uint16_t h, uint8_t s, uint8_t v)
 {
+    s = 255;
+    v = get_led_intensity();
     uint8_t f = (h % 60) * 255 / 60;
     uint8_t p = (255 - s) * (uint16_t)v / 255;
     uint8_t q = (255 - f * (uint16_t)s / 255) * (uint16_t)v / 255;
@@ -300,8 +219,9 @@ void get_time_in_words(void)
   num_words = 0;
   add_word(wrd_its);
 
-  int m = rtc.getMinutes();
-  int h = rtc.getHours();
+  RtcDateTime now = Rtc.GetDateTime();
+  int m = now.Minute();
+  int h = now.Hour();
   int md=(m % 5);
   switch (md)
   {
@@ -322,7 +242,6 @@ void get_time_in_words(void)
       break;
   }
 
-
   switch (m)
   {
   case 0:
@@ -338,24 +257,20 @@ void get_time_in_words(void)
   case 50: case 51: case 52: case 53: case 54:
       add_word(wrd_ten);
       break;
-  case 15: case 45:
-        add_word(wrd_a);
-  case 16: case 17: case 18: case 19:
-  case 46: case 47: case 48: case 49:
+  case 15: case 16: case 17: case 18: case 19:
+  case 45: case 46: case 47: case 48: case 49:
       add_word(wrd_quarter);
       break;
   case 20: case 21: case 22: case 23: case 24:
   case 40: case 41: case 42: case 43: case 44:
       add_word(wrd_twenty);
       break;
-  case 25: case 26: case 27: case 28:  case 29:
+  case 25: case 26: case 27: case 28: case 29:
   case 35: case 36: case 37: case 38: case 39:
       add_word(wrd_twenty);
       add_word(wrd_five);
       break;
-  case 30: 
-        add_word(wrd_a);
-  case 31: case 32: case 33: case 34:
+  case 30: case 31: case 32: case 33: case 34:
       add_word(wrd_half);
       break;
   }
@@ -509,7 +424,7 @@ void get_time_in_words(void)
   }
   add_word(wrd_today); add_word(wrd_is);
 
-  switch (rtc.getWeekDay()){
+  switch (now.DayOfWeek()){
     case 0:
       add_word(wrd_sunday);
       break;
@@ -569,22 +484,6 @@ void word_time_to_colour_buffer(void)
   }
 }
 
-//int testw=0;
-//void test_colour_buffer(void)
-//{
-//  clear_down_all_colors();
-//  rgb_color col = get_word_color(testw);
-//  for(int j = 0; j < words_len[testw]; j++)
-//  {
-//    colors[j+words_st[testw]] = col;
-//  }
-//   testw ++;
-//   if (testw>44)
-//   {
-//    testw=0;
-//   }
-//}
-
 void set_pixel(int x, int y, rgb_color col)
 {
    if ((x < 0) || ( x > 15))
@@ -618,7 +517,6 @@ void add_5x7_char_to_color_buffer(int xp, int yp, uint16_t c, rgb_color col)
     char g = pgm_read_byte_near(font5x7 + (c+y));
     for(int x=0;x<6;x++)
     {
-      //g &= (1<<(5-x));
       if (g & (1<<(5-x)))
       {
         set_pixel(x+xp,y+yp,col);
@@ -632,15 +530,10 @@ void add_5x7_num_to_color_buffer(int xp, int yp, int c, rgb_color col)
   add_5x7_char_to_color_buffer(xp,yp,c+0x30,col);
 }
 
-void scroll_message_on_display_single_col(String message, rgb_color col)
+void scroll_message_on_display_single_col(char *message, rgb_color col)
 {
-  message = "  " + message + "   ";
-  int clen = message.length() -3 ;
-
-  if (random()%10==0)
-  {
-    col = (rgb_color){30,30,30};
-  }
+  int clen = strlen(message) -3 ;
+  col = (rgb_color){30,30,get_led_intensity()};
   for (int ch = 0; ch < clen; ch++)
   {
       for (int x = 4; x >= 0; x--)
@@ -656,28 +549,67 @@ void scroll_message_on_display_single_col(String message, rgb_color col)
   }
 }
 
-void process_message(int dbg, String message)
-{
-  Serial.print("Recieved scrolling message {");
-  Serial.print(message);
-  Serial.print("}");
-  Serial.println(dbg);
-
-  scroll_message_on_display_single_col(message,get_word_color(1));
-}
 
 void setup()
 {
-  rtc.stopRTC(); //stop the RTC
-  rtc.setTime(11,06,0); //set the time here
-  rtc.setDate(21,2,2017); //set the date here
-  rtc.startRTC(); //start the RTC
   
   Serial.begin(19200); //choose the serial speed here
   Serial.setTimeout(500);
   
-  Serial.println("Ready to receive time or messages."); 
-  Serial.println("Time format is T12:00:00-01-02-2016~"); 
+//    Serial.print("compiled: ");
+//    Serial.print(__DATE__);
+//    Serial.println(__TIME__);
+
+    //--------RTC SETUP ------------
+    Rtc.Begin();
+
+    // if you are using ESP-01 then uncomment the line below to reset the pins to
+    // the available pins for SDA, SCL
+    // Wire.begin(0, 2); // due to limited pins, use pin 0 and 2 for SDA, SCL
+
+    RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+//    Serial.println();
+
+    if (!Rtc.IsDateTimeValid()) 
+    {
+        // Common Cuases:
+        //    1) first time you ran and the device wasn't running yet
+        //    2) the battery on the device is low or even missing
+
+  //      Serial.println("RTC lost confidence in the DateTime!");
+
+        // following line sets the RTC to the date & time this sketch was compiled
+        // it will also reset the valid flag internally unless the Rtc device is
+        // having an issue
+
+        Rtc.SetDateTime(compiled);
+    }
+
+    if (!Rtc.GetIsRunning())
+    {
+//        Serial.println("RTC was not actively running, starting now");
+        Rtc.SetIsRunning(true);
+    }
+
+    RtcDateTime now = Rtc.GetDateTime();
+    if (now < compiled) 
+    {
+//        Serial.println("RTC is older than compile time!  (Updating DateTime)");
+        Rtc.SetDateTime(compiled);
+    }
+    else if (now > compiled) 
+    {
+//        Serial.println("RTC is newer than compile time. (this is expected)");
+    }
+    else if (now == compiled) 
+    {
+//        Serial.println("RTC is the same as compile time! (not expected but all is fine)");
+    }
+
+    // never assume the Rtc was last configured by you, so
+    // just clear them to your needed state
+    Rtc.Enable32kHzPin(false);
+    Rtc.SetSquareWavePin(DS3231SquareWavePin_ModeNone); 
 }
 
 float gh=0.0;
@@ -686,184 +618,87 @@ bool read_temp = false;
 bool disp_temp = false;
 bool disp_date = false;
 
-
 void date_to_colour_buffer(void)
 {
- char str_buff[128];
- char str_month[10];
- char str_day[10];
- int d = rtc.getDay();
- int y = rtc.getYear();
- int mth = rtc.getMonth();
+ char str_buff[64];
+ char str_month[40];
+ char str_day[4];
+ 
+ RtcDateTime now = Rtc.GetDateTime();
+ int d = now.Day();
+ int y = now.Year();
+ int mth = now.Month();
+ int hr = now.Hour();
+ int mins = now.Minute();
  strcpy_P(str_month, (char*)pgm_read_word(&(month_table[mth-1])));
- strcpy_P(str_day, (char*)pgm_read_word(&(day_table[rtc.getWeekDay()])));
+ strcpy_P(str_day, (char*)pgm_read_word(&(day_table[now.DayOfWeek()])));
  switch (d % 10)
  {
   case 1:
-    sprintf(str_buff,"%s %dst %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff," - %s %dst %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
     break;
   case 2:
-    sprintf(str_buff,"%s %dnd %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff," - %s %dnd %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
     break;
   case 3:
-    sprintf(str_buff,"%s %drd %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff," - %s %drd %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
     break;
   default:
-    sprintf(str_buff,"%s %dth %s %d %02d:%02d", str_day, d, str_month, y, rtc.getHours(), rtc.getMinutes());  
+    sprintf(str_buff," - %s %dth %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
     break;
  }
  
- // Time is returned in minutes elapsed since midnight. If no sunrises or
- // sunsets are expected, a "-1" is returned.
- int sunrise  = sun_home.sunrise(y, mth, d, false);
- int sunset   = sun_home.sunset (y, mth, d, false);
-
- char tme[] = "00:00";
- Dusk2Dawn::min2str(tme, sunrise);
- strcat(str_buff, " Sunrise:");
- strcat(str_buff,tme);
-                    
- strcpy(tme,"00:00");
- Dusk2Dawn::min2str(tme, sunset);
- strcat(str_buff, " Sunset:");
- strcat(str_buff,tme);
- 
  char t_buff[20];
- sprintf(t_buff, " Temp:%dC RH:%d%%",(int)gt,(int)gh);  
+ sprintf(t_buff, " %dC %d%% - ",(int)gt,(int)gh);  
  strcat(str_buff, t_buff);
  scroll_message_on_display_single_col(str_buff,get_word_color(random(20)));
 }
 
- //strcpy_P(buffer, (char*)pgm_read_word(&(string_table[i]))); // Necessary casts and dereferencing, just copy.
-
-void random_to_colour_buffer(void)
+unsigned char get_led_intensity()
 {
-  //clear_down_all_colors();
-  for(int i=0;i<10;i++)
-  {
-      colors[random(240)]=(rgb_color){0,0,0};
-  }
-  for(int i=0;i<5;i++)
-  {
-      colors[random(240)]=hsvToRgb(random(360), 250, 40);
-  }
-  ledStrip.write(colors, LED_COUNT);  
+   int v = analogRead(0);
+   if (v<512) { v = 512;}
+   v=v-512;
+   return 8 + (v/16);
 }
-
-//void do_line(int x1, int y1, int x2, int y2, rgb_color col)
-//{
-//    int gd,gm;
-//
-//    int dx = (x2 - x1);
-//    int dy = (y2 - y1);
-//    int p = 2 * (dy) - (dx);
-//
-//    int x = x1;
-//    int y = y1;
-//
-//    set_pixel(x,y,col);
-//
-//    while(x <= x2)
-//    {
-//      if(p < 0)
-//      {
-//        x=x+1;
-//        y=y;
-//        p = p + 2 * (dy);
-//      }
-//      else
-//      {
-//        x=x+1;
-//        y=y+1;
-//        p = p + 2 * (dy - dx);
-//     }
-//     set_pixel(x,y,col);
-//   }  
-//}
-//
-//void draw_clock_face(void)
-//{
-//  clear_down_all_colors();
-//  float ang = 0.5235 * (float)(rtc.getHours() + 3);
-//  float ex = 8 + (4*sin(ang));
-//  float ey = 8 + (4*cos(ang));
-//  
-//  do_line(8,8,ex,ey,(rgb_color){100,0,0});
-//  ang = 0.1047 * (float)(rtc.getMinutes() + 15);
-//  ex = 8 + (6*sin(ang));
-//  ey = 8 + (6*cos(ang));
-//  do_line(8,8,ex,ey,(rgb_color){0,100,0});  
-//
-//  ang = 0.1047 * (float)(rtc.getSeconds() + 15);
-//  ex = 8 + (8*sin(ang));
-//  ey = 8 + (8*cos(ang));
-//  do_line(8,8,ex,ey,(rgb_color){0,0,100});  
-//  ledStrip.write(colors, LED_COUNT);  
-//}
 
 void loop()
 {
   // If any digit is received, we will go into integer parsing mode
   // until all three calls to parseInt return an interger or time out.
-  read_command_from_serial();
+  //read_command_from_serial();
 
-  int secs =rtc.getSeconds();
+  RtcDateTime now = Rtc.GetDateTime();
+  int secs = now.Second() % 20;
   if (secs == 3)
   {
     read_temp = true;
   }
-  if ((secs == 4) && (read_temp==true))
+  else if ((secs == 4) && (read_temp==true))
   {
+//    Serial.println("Reading temperature");
     gh = dht.readHumidity();
     // Read temperature as Celsius (the default)
     gt = dht.readTemperature();
     read_temp = false;
     disp_temp = true;
   }
-  if (secs == 34)
+  else if ((secs == 5) && (disp_temp == true))
   {
-    disp_date = true;
-  }
-
-  if ((secs == 5) && (disp_temp == true))
-  {
+//    Serial.println("Display date 1");
     disp_temp=false;
     //temperature_to_colour_buffer();
     date_to_colour_buffer();
-  }
-  else if ((secs == 35) && (disp_date == true))
-  {
-    disp_date = false;
-    date_to_colour_buffer();
-  }
-  else if (secs >= 59)
-  {
-    random_to_colour_buffer();
   }
   else
   {
     get_time_in_words();
     word_time_to_colour_buffer();
+    // Write to the LED strip.
+    ledStrip.write(colors, LED_COUNT);  
   }
-  //test_colour_buffer();
-  // Write to the LED strip.
-  ledStrip.write(colors, LED_COUNT);  
-
-//  Serial.print(rtc.getHours(), DEC);
-//  Serial.print(":");
-//  Serial.print(rtc.getMinutes(), DEC);
-//  Serial.print(":");
-//  Serial.print(rtc.getSeconds(), DEC);
-//  Serial.print(" -- ");
-//  Serial.print(rtc.getDay(), DEC);
-//  Serial.print("/");
-//  Serial.print(rtc.getMonth(), DEC);
-//  Serial.print("/");
-//  Serial.print(rtc.getYear(), DEC);
-//  Serial.print("  Day of week: ");
-//  Serial.println(rtc.getWeekDay(), DEC);
-
-  delay (100);
+  
+  delay (250);
 }
 
 
