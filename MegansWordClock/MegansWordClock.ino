@@ -2,11 +2,13 @@
  *  Megans word clock
  */
  
+#include <math.h>
 #include <Wire.h> 
 #include <RtcDS3231.h>
 #include <avr/pgmspace.h>
 #include <PololuLedStrip.h>
 #include "DHT.h"
+#include <Dusk2Dawn.h>
 
 #define DHTPIN 2     // what digital pin we're connected to
 
@@ -26,6 +28,7 @@ PololuLedStrip<12> ledStrip;
 // Create a buffer for holding the colors (3 bytes per color).
 #define LED_COUNT 240
 rgb_color colors[LED_COUNT];
+Dusk2Dawn ddhome(54.484615, -5.43664, 0);
 
 enum ewords { wrd_its = 0, wrd_a , wrd_just, wrd_gone, wrd_near, wrd_nearly , wrd_ten , wrd_quarter , wrd_twenty , wrd_half , wrd_five , 
               wrd_minutes , wrd_to , wrd_past , wrd_hone , wrd_hthree , wrd_htwo , wrd_hfour , wrd_hfive , wrd_hsix , wrd_hseven , 
@@ -47,29 +50,29 @@ const PROGMEM int words_len[] {
                     7   , 8   , 9   , 6   , 5   , 2   , 9   , 6   , 7   , 8   ,
                     6   , 6   , 8   , 2   , 5};       
 
-const char month_01[] PROGMEM = {"Jan"};
-const char month_02[] PROGMEM = {"Feb"};
-const char month_03[] PROGMEM = {"Mar"};
-const char month_04[] PROGMEM = {"Apr"};
+const char month_01[] PROGMEM = {"January"};
+const char month_02[] PROGMEM = {"February"};
+const char month_03[] PROGMEM = {"March"};
+const char month_04[] PROGMEM = {"April"};
 const char month_05[] PROGMEM = {"May"};
-const char month_06[] PROGMEM = {"Jun"};
-const char month_07[] PROGMEM = {"Jul"};
-const char month_08[] PROGMEM = {"Aug"};
-const char month_09[] PROGMEM = {"Sep"};
-const char month_10[] PROGMEM = {"Oct"};
-const char month_11[] PROGMEM = {"Nov"};
-const char month_12[] PROGMEM = {"Dec"};
+const char month_06[] PROGMEM = {"June"};
+const char month_07[] PROGMEM = {"July"};
+const char month_08[] PROGMEM = {"August"};
+const char month_09[] PROGMEM = {"September"};
+const char month_10[] PROGMEM = {"October"};
+const char month_11[] PROGMEM = {"November"};
+const char month_12[] PROGMEM = {"December"};
 
 const char* const month_table[] PROGMEM = {month_01, month_02, month_03, month_04, month_05, month_06,
                                            month_07, month_08, month_09, month_10, month_11, month_12};
 
-const char  day_01[] PROGMEM = {"Sun"};
-const char  day_02[] PROGMEM = {"Mon"};
-const char  day_03[] PROGMEM = {"Tue"};
-const char  day_04[] PROGMEM = {"Wed"};
-const char  day_05[] PROGMEM = {"Thu"};
-const char  day_06[] PROGMEM = {"Fri"};
-const char  day_07[] PROGMEM = {"Sat"};
+const char  day_01[] PROGMEM = {"Sunday"};
+const char  day_02[] PROGMEM = {"Monday"};
+const char  day_03[] PROGMEM = {"Tuesday"};
+const char  day_04[] PROGMEM = {"Wednesday"};
+const char  day_05[] PROGMEM = {"Thursday"};
+const char  day_06[] PROGMEM = {"Friday"};
+const char  day_07[] PROGMEM = {"Saturday"};
 
 const char* const day_table[] PROGMEM ={day_01, day_02, day_03, day_04, day_05, day_06, day_07};
 
@@ -177,6 +180,14 @@ const PROGMEM char font5x7[] = {
    };   
    
 
+int olda=900;
+unsigned char get_led_intensity()
+{
+   int v = olda; 
+   if (v<512) { v = 512;}
+   v=v-512;
+   return 5 + (v/15);
+}
 // Converts a color from HSV to RGB.
 // h is hue, as a number between 0 and 360.
 // s is the saturation, as a number between 0 and 255.
@@ -204,7 +215,7 @@ rgb_color hsvToRgb(uint16_t h, uint8_t s, uint8_t v)
 rgb_color get_word_color(int w)
 {
   uint16_t t = millis() >> 8;
-  t += w * 137;
+  t += w * 79;
   return hsvToRgb(t % 360, 250, 40);
 }
 
@@ -533,7 +544,6 @@ void add_5x7_num_to_color_buffer(int xp, int yp, int c, rgb_color col)
 void scroll_message_on_display_single_col(char *message, rgb_color col)
 {
   int clen = strlen(message) -3 ;
-  col = (rgb_color){30,30,get_led_intensity()};
   for (int ch = 0; ch < clen; ch++)
   {
       for (int x = 4; x >= 0; x--)
@@ -544,7 +554,7 @@ void scroll_message_on_display_single_col(char *message, rgb_color col)
         add_5x7_char_to_color_buffer(x+6,8,message[ch+2],col);
         add_5x7_char_to_color_buffer(x+12,8,message[ch+3],col);
         ledStrip.write(colors, LED_COUNT);  
-        delay(40);
+        delay(22);
       }
   }
 }
@@ -618,49 +628,182 @@ bool read_temp = false;
 bool disp_temp = false;
 bool disp_date = false;
 
-void date_to_colour_buffer(void)
+void time_to_leds(void)
 {
- char str_buff[64];
- char str_month[40];
- char str_day[4];
+ char str_buff[32];
+ RtcDateTime now = Rtc.GetDateTime();
+ int hr = now.Hour();
+ int mins = now.Minute();
+ sprintf(str_buff,"   %02d:%02d    " , hr, mins);  
+ scroll_message_on_display_single_col(str_buff,(rgb_color){get_led_intensity(),get_led_intensity(),get_led_intensity()});
+}
+
+void date_to_leds(void)
+{
+ char str_buff[256];
+ char str_month[16];
+ char str_day[16];
+ char t_buff[20];
  
  RtcDateTime now = Rtc.GetDateTime();
  int d = now.Day();
- int y = now.Year();
  int mth = now.Month();
+ strcpy_P(str_month, (char*)pgm_read_word(&(month_table[mth-1])));
+ strcpy_P(str_day, (char*)pgm_read_word(&(day_table[now.DayOfWeek()])));
+
+ str_buff[0]=0;
+ sprintf(t_buff,"  %s" , str_day);  
+ strcat(str_buff,t_buff);
+ sprintf(t_buff," %d" , d);  
+ strcat(str_buff,t_buff);
+ 
+ switch (d % 10)
+ {
+  case 1:
+    strcat(str_buff,"st");  
+    break;
+  case 2:
+    strcat(str_buff,"nd");  
+    break;
+  case 3:
+    strcat(str_buff,"rd");  
+    break;
+  default:
+    strcat(str_buff,"th");  
+    break;
+ }
+ sprintf(t_buff," %s    " , str_month);  
+ strcat(str_buff,t_buff);
+ scroll_message_on_display_single_col(str_buff,hsvToRgb(220,0,0));
+}
+
+void sunrise_to_leds(void)
+{
+ char str_buff[256];
+ char t_buff[20];
+ 
+ RtcDateTime now = Rtc.GetDateTime();
+ int d = now.Day();
+ int mth = now.Month();
+ int y= now.Year();
+
+ int sun  = ddhome.sunrise(y, mth, d, false);
+ Dusk2Dawn::min2str(t_buff,sun);
+
+ str_buff[0]=0;
+ strcat(str_buff, "  Sunrise ");
+ strcat(str_buff, t_buff);
+ strcat(str_buff, "    ");
+ scroll_message_on_display_single_col(str_buff,hsvToRgb(40,0,0));
+}
+
+void sunset_to_leds(void)
+{
+ char str_buff[256];
+ char t_buff[20];
+ 
+ RtcDateTime now = Rtc.GetDateTime();
+ int d = now.Day();
+ int mth = now.Month();
+ int y= now.Year();
+
+ int sun  = ddhome.sunset(y, mth, d, false);
+ Dusk2Dawn::min2str(t_buff,sun);
+
+ str_buff[0]=0;
+ strcat(str_buff, "  Sunset ");
+ strcat(str_buff, t_buff);
+ strcat(str_buff, "    ");
+ scroll_message_on_display_single_col(str_buff,hsvToRgb(11,0,0));
+}
+
+void temp_to_leds(void)
+{
+ char str_buff[256];
+ sprintf(str_buff,"  %d'C    ",(int)gt);
+ scroll_message_on_display_single_col(str_buff,hsvToRgb(120,0,0));
+}
+
+void rh_to_leds(void)
+{
+ char str_buff[256];
+ sprintf(str_buff,"  %d%%    ",(int)gh);
+ scroll_message_on_display_single_col(str_buff,hsvToRgb(240,0,0));
+}
+
+void do_display_info(void)
+{
+  time_to_leds();
+  date_to_leds();
+  time_to_leds();
+  sunrise_to_leds();
+  sunset_to_leds();
+  time_to_leds();
+  temp_to_leds();
+  rh_to_leds();
+  time_to_leds();
+}
+
+void date_to_colour_buffer(void)
+{
+ char str_buff[256];
+ char str_month[16];
+ char str_day[16];
+ char t_buff[20];
+ 
+ RtcDateTime now = Rtc.GetDateTime();
+ int d = now.Day();
+ int mth = now.Month();
+ int y= now.Year();
  int hr = now.Hour();
  int mins = now.Minute();
  strcpy_P(str_month, (char*)pgm_read_word(&(month_table[mth-1])));
  strcpy_P(str_day, (char*)pgm_read_word(&(day_table[now.DayOfWeek()])));
+
+ str_buff[0]=0;
+ sprintf(t_buff,"   %02d:%02d" , hr, mins);  
+ strcat(str_buff,t_buff);
+ sprintf(t_buff,"  %s" , str_day);  
+ strcat(str_buff,t_buff);
+ sprintf(t_buff," %d" , d);  
+ strcat(str_buff,t_buff);
+ 
  switch (d % 10)
  {
   case 1:
-    sprintf(str_buff," - %s %dst %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
+    strcat(str_buff,"st");  
     break;
   case 2:
-    sprintf(str_buff," - %s %dnd %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
+    strcat(str_buff,"nd");  
     break;
   case 3:
-    sprintf(str_buff," - %s %drd %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
+    strcat(str_buff,"rd");  
     break;
   default:
-    sprintf(str_buff," - %s %dth %s %d %02d:%02d", str_day, d, str_month, y, hr, mins);  
+    strcat(str_buff,"th");  
     break;
  }
- 
- char t_buff[20];
- sprintf(t_buff, " %dC %d%% - ",(int)gt,(int)gh);  
+ sprintf(t_buff," %s" , str_month);  
+ strcat(str_buff,t_buff);
+ sprintf(t_buff,"  %02d:%02d" , hr, mins);  
+ strcat(str_buff,t_buff);
+
+
+ int sun  = ddhome.sunrise(y, mth, d, false);
+ Dusk2Dawn::min2str(t_buff,sun);
+ strcat(str_buff, "  Sunrise ");
  strcat(str_buff, t_buff);
+ sun  = ddhome.sunset(y, mth, d, false);
+ Dusk2Dawn::min2str(t_buff,sun);
+ strcat(str_buff, "  Sunset ");
+ strcat(str_buff, t_buff);
+ sprintf(t_buff, "  %dC %d%%",(int)gt,(int)gh);  
+ strcat(str_buff, t_buff);
+ sprintf(t_buff,"  %02d:%02d    " , hr, mins);  
+ strcat(str_buff,t_buff);
  scroll_message_on_display_single_col(str_buff,get_word_color(random(20)));
 }
 
-unsigned char get_led_intensity()
-{
-   int v = analogRead(0);
-   if (v<512) { v = 512;}
-   v=v-512;
-   return 8 + (v/16);
-}
 
 void loop()
 {
@@ -680,6 +823,7 @@ void loop()
     gh = dht.readHumidity();
     // Read temperature as Celsius (the default)
     gt = dht.readTemperature();
+    olda = analogRead(0);
     read_temp = false;
     disp_temp = true;
   }
@@ -688,7 +832,8 @@ void loop()
 //    Serial.println("Display date 1");
     disp_temp=false;
     //temperature_to_colour_buffer();
-    date_to_colour_buffer();
+    //date_to_colour_buffer();
+    do_display_info();
   }
   else
   {
